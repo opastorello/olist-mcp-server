@@ -1,0 +1,10 @@
+services:
+  swagger-mcp:
+    build: .
+    ports:
+      - "47321:47321"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

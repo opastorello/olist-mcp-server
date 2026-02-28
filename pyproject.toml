@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "swagger-mcp-server"
+version = "1.0.0"
+description = "MCP server auto-generated from any OpenAPI/Swagger spec"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "uvicorn>=0.30.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

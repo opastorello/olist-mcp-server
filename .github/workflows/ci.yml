@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    env:
+      OAUTH_CLIENT_ID: "test-client-id"
+      OAUTH_CLIENT_SECRET: "test-client-secret"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Verify tools registration
+        run: |
+          python -c "
+          from src.tools_generator import register_tools
+          from mcp.server.fastmcp import FastMCP
+          mcp = FastMCP('test')
+          count = register_tools(mcp)
+          assert count > 0, f'Expected tools, got {count}'
+          print(f'OK: {count} tools registered')
+          "
+
+      - name: Verify server module loads
+        run: |
+          python -c "
+          import importlib
+          mod = importlib.import_module('src.server')
+          assert hasattr(mod, 'mcp'), 'Missing mcp instance'
+          assert hasattr(mod, 'main'), 'Missing main function'
+          assert hasattr(mod, 'get_token_manager'), 'Missing get_token_manager'
+          print('OK: server module loads correctly')
+          "
+
+      - name: Verify API client
+        env:
+          API_BASE_URL: "https://api.example.com/v1"
+        run: |
+          python -c "
+          from src.api_client import APIClient
+          client = APIClient()
+          assert client.base_url == 'https://api.example.com/v1'
+          headers = client._headers('my-token-123')
+          assert 'Bearer my-token-123' in headers['Authorization']
+          print('OK: API client works')
+          "
+
+      - name: Verify OAuth module
+        run: |
+          python -c "
+          from src.oauth import OAuthTokenManager
+          manager = OAuthTokenManager(
+              client_id='test-id',
+              client_secret='test-secret',
+          )
+          assert not manager.has_tokens
+          assert manager._is_expired()
+          print('OK: OAuth module works')
+          "
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t swagger-mcp:test .
+
+      - name: Test container starts
+        run: |
+          docker run -d --name test-mcp -p 47321:47321 \
+            -e OAUTH_CLIENT_ID=test-id \
+            -e OAUTH_CLIENT_SECRET=test-secret \
+            swagger-mcp:test
+          sleep 5
+          curl -s http://localhost:47321/health | grep -q '"status"'
+          echo "OK: health endpoint works"
+          curl -s http://localhost:47321/info | grep -q '"tools"'
+          echo "OK: info endpoint works"
+          docker stop test-mcp
+          docker rm test-mcp

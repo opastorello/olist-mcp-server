@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+.oauth_tokens.json
+.oauth_code
+data/
+.claude/
